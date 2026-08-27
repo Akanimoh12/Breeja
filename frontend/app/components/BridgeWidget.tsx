@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  formatUnits,
   isAddress,
   parseSignature,
   parseUnits,
@@ -15,13 +16,15 @@ import {
   useSwitchChain,
 } from "wagmi";
 import type { Chain } from "viem";
-import { baseSepoliaChain, sepoliaChain } from "@/lib/chains";
+import { baseSepoliaChain, hskTestnet, sepoliaChain } from "@/lib/chains";
 import ChainSelector from "./ChainSelector";
 
 const RELAYER_API_URL = process.env.NEXT_PUBLIC_RELAYER_API_URL;
 
 const HSK_CHAIN_ID = 133;
 const USDC_DECIMALS = 6;
+const BRIDGE_FEE_BPS = BigInt(50);
+const HSK_TOKEN_ADDRESS = process.env.NEXT_PUBLIC_HSK_TOKEN_ADDRESS as Address;
 
 type SourceChain = "sepolia" | "baseSepolia";
 
@@ -151,6 +154,23 @@ export default function BridgeWidget({ onSubmitted }: BridgeWidgetProps) {
     query: { enabled: Boolean(address && USDC_ADDRESS) },
   });
 
+  const { data: hskBalance } = useReadContract({
+    address: HSK_TOKEN_ADDRESS,
+    abi: [
+      {
+        type: "function",
+        name: "balanceOf",
+        stateMutability: "view",
+        inputs: [{ name: "account", type: "address" }],
+        outputs: [{ type: "uint256" }],
+      },
+    ] as const,
+    functionName: "balanceOf",
+    args: recipient && isAddress(recipient) ? [recipient] : undefined,
+    chainId: hskTestnet.id,
+    query: { enabled: Boolean(recipient && isAddress(recipient) && HSK_TOKEN_ADDRESS) },
+  });
+
   const amountBaseUnits = useMemo(() => {
     if (!amount) return null;
     try {
@@ -160,6 +180,13 @@ export default function BridgeWidget({ onSubmitted }: BridgeWidgetProps) {
       return null;
     }
   }, [amount]);
+
+  const feeBaseUnits =
+    amountBaseUnits !== null ? (amountBaseUnits * BRIDGE_FEE_BPS) / BigInt(10_000) : null;
+  const payoutBaseUnits =
+    amountBaseUnits !== null && feeBaseUnits !== null
+      ? amountBaseUnits - feeBaseUnits
+      : null;
 
   const recipientIsValid = recipient.length > 0 && isAddress(recipient);
   const insufficientBalance =
@@ -323,40 +350,90 @@ export default function BridgeWidget({ onSubmitted }: BridgeWidgetProps) {
 
       <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-5">
         <div>
-          <label
-            htmlFor="amount"
-            className="block text-base font-medium text-ink"
-          >
-            Amount (USDC)
-          </label>
-          <input
-            id="amount"
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="any"
-            placeholder="10.0"
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
-            disabled={!isConnected || isBusy}
-            className="mt-1.5 w-full rounded-xl border border-border px-4 py-3 text-base text-ink outline-none focus:border-accent disabled:bg-gray-50 disabled:text-body"
-          />
-          {balance !== undefined && (
-            <p className="mt-1.5 text-sm text-body">
-              Balance on {sourceChainDisplayName}:{" "}
-              {(Number(balance) / 10 ** USDC_DECIMALS).toLocaleString(
-                undefined,
-                { maximumFractionDigits: 6 },
-              )}{" "}
-              USDC
-            </p>
-          )}
+          <div className="flex items-baseline justify-between gap-3">
+            <label
+              htmlFor="amount"
+              className="block text-base font-medium text-ink"
+            >
+              Amount (USDC)
+            </label>
+            {balance !== undefined && (
+              <button
+                type="button"
+                onClick={() =>
+                  setAmount(formatUnits(balance as bigint, USDC_DECIMALS))
+                }
+                disabled={!isConnected || isBusy}
+                className="text-sm font-medium text-body hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Balance:{" "}
+                {(Number(balance) / 10 ** USDC_DECIMALS).toLocaleString(
+                  undefined,
+                  { maximumFractionDigits: 6 },
+                )}{" "}
+                USDC
+              </button>
+            )}
+          </div>
+          <div className="relative mt-1.5">
+            <input
+              id="amount"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              placeholder="10.0"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              disabled={!isConnected || isBusy}
+              className="w-full rounded-xl border border-border px-4 py-3 pr-16 text-base text-ink outline-none focus:border-accent disabled:bg-gray-50 disabled:text-body"
+            />
+            {balance !== undefined && (
+              <button
+                type="button"
+                onClick={() =>
+                  setAmount(formatUnits(balance as bigint, USDC_DECIMALS))
+                }
+                disabled={!isConnected || isBusy}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-badge-bg px-2.5 py-1 text-sm font-medium text-accent hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Max
+              </button>
+            )}
+          </div>
           {insufficientBalance && (
             <p className="mt-1.5 text-sm font-medium text-accent">
               Amount exceeds your USDC balance.
             </p>
           )}
         </div>
+
+        {amountBaseUnits !== null && payoutBaseUnits !== null && feeBaseUnits !== null && (
+          <div className="rounded-xl bg-badge-bg px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-base font-medium text-ink">
+                You&apos;ll receive
+              </span>
+              <span className="text-base font-semibold text-ink">
+                {formatUnits(payoutBaseUnits, USDC_DECIMALS)} USDC
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-body">
+              on HSK Chain Testnet · Bridge fee:{" "}
+              {formatUnits(feeBaseUnits, USDC_DECIMALS)} USDC
+            </p>
+            {hskBalance !== undefined && (
+              <p className="mt-1 text-sm text-body">
+                Current balance on HSK:{" "}
+                {(Number(hskBalance) / 10 ** USDC_DECIMALS).toLocaleString(
+                  undefined,
+                  { maximumFractionDigits: 6 },
+                )}{" "}
+                USDC
+              </p>
+            )}
+          </div>
+        )}
 
         <div>
           <label

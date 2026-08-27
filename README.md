@@ -1,6 +1,10 @@
 # Breeja
 
+<img src="frontend/public/brand/breeja-logo.png" width="40" height="40" alt="Breeja logo" />
+
 **Settlement infrastructure other agents can pay through — gasless, AI-routed, cross-chain stablecoin payment rails.**
+
+**Live app:** [breeja.vercel.app](https://breeja.vercel.app)
 
 Breeja moves USDC across chains in seconds, gaslessly, for two kinds of payers: a human bridging their own funds through the app, or an autonomous agent paying another agent's wallet on a different chain, programmatically, with no browser involved. Same contracts, same relayer, same speed, two front doors. A deterministic routing layer checks live gas price and destination-pool liquidity, computes the fee, executes the payment, and an LLM turns the decision into a plain-language status update for the UI.
 
@@ -42,6 +46,10 @@ Both bridge into a single destination:
 | HSK Chain Testnet | `133` | `DestPool`: `0xA5dd225Beb2Ec0009Fe143eb0B9309Ba07d23737` | `MockUSDC` — Breeja's own mintable testnet stand-in, since no independently-verified canonical USDC exists yet on HSK testnet (stated plainly, per [`docs/SMART_CONTRACTS.md`](docs/SMART_CONTRACTS.md)) |
 
 Every claim above has been exercised against real testnets — real signed permits, real deposit transactions, real releases, both self-bridge and agent-to-agent (`recipient != payer`), on both source chains.
+
+## Mainnet deployment
+
+Mainnet deploy tooling exists at `contracts/script/*Mainnet.s.sol` — mainnet-specific deploy scripts, `foundry.toml` RPC/etherscan entries, and an `.env.mainnet.example` template — so that going live is filling in config, not writing code under pressure. Nothing is deployed to any mainnet yet, and it won't be until [`docs/MAINNET_CHECKLIST.md`](docs/MAINNET_CHECKLIST.md) (audit/review, multisig ownership, canonical USDC re-verification, liquidity and incident plans) is satisfied.
 
 ## Two ways to use the rail
 
