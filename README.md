@@ -32,7 +32,15 @@ Two front doors onto the same rail:
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full flow and the trust model, stated plainly: this is a **custodial fast-bridge** (v1 uses a single permissioned relayer for speed; v2 decentralizes release via a bonded watcher network — see [`docs/ROADMAP.md`](docs/ROADMAP.md)).
 
-## Live on two source chains
+## Live on HSK Chain Mainnet
+
+| Chain | Chain ID | Contract | Stablecoin |
+|---|---|---|---|
+| HSK Chain Mainnet | `177` | `DestPool`: [`0xc97C6656c19fB9Dc0F9Bc384632e05d4782150C5`](https://hsk.blockscout.com/address/0xc97C6656c19fB9Dc0F9Bc384632e05d4782150C5) | [`USDC.e`](https://hsk.blockscout.com/address/0x054ed45810DbBAb8B27668922D110669c9D88D0a) (Bridged USDC, `0x054ed45810DbBAb8B27668922D110669c9D88D0a`) — real Circle `FiatTokenProxy`, EIP-3009 verified on-chain |
+
+The mainnet `DestPool` is deployed and configured against real USDC.e, but is **intentionally unfunded** — it holds zero liquidity and is not yet open to users. Funding it is gated on [`docs/MAINNET_CHECKLIST.md`](docs/MAINNET_CHECKLIST.md), specifically multisig ownership (it is currently owned by a single EOA) and an audit pass. The live product below runs on testnets.
+
+## Live on two source chains (testnet)
 
 | Source chain | Chain ID | Contract | Stablecoin |
 |---|---|---|---|
@@ -49,7 +57,11 @@ Every claim above has been exercised against real testnets — real signed permi
 
 ## Mainnet deployment
 
-Mainnet deploy tooling exists at `contracts/script/*Mainnet.s.sol` — mainnet-specific deploy scripts, `foundry.toml` RPC/etherscan entries, and an `.env.mainnet.example` template — so that going live is filling in config, not writing code under pressure. Nothing is deployed to any mainnet yet, and it won't be until [`docs/MAINNET_CHECKLIST.md`](docs/MAINNET_CHECKLIST.md) (audit/review, multisig ownership, canonical USDC re-verification, liquidity and incident plans) is satisfied.
+`DestPool` is deployed to HSK Chain Mainnet (address above), pointing at real bridged USDC.e whose EIP-3009 support and EIP-712 domain were verified directly on-chain before deploying. It holds **zero liquidity** and is not open to users.
+
+Remaining gates before it handles real funds, per [`docs/MAINNET_CHECKLIST.md`](docs/MAINNET_CHECKLIST.md): an audit or thorough review pass, moving ownership from the current single EOA to a multisig, and a documented liquidity + incident-response plan. Source-side `SourceVault` mainnet deploys are not done — deploy tooling for them exists at `contracts/script/*Mainnet.s.sol`.
+
+One finding worth recording: HSK mainnet USDT (`0xF1B5…9029`) is an `OptimismMintableERC20` and does **not** implement EIP-3009 — its `DOMAIN_SEPARATOR()` reverts — so it cannot support Breeja's gasless permit flow. USDC.e is the only viable stablecoin on this chain for this design.
 
 ## Two ways to use the rail
 
